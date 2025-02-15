@@ -13,12 +13,14 @@ repl env = do
   hFlush stdout
   input <- getLine
   unless (input == "exit") $ do
-    case readExpr input >>= eval env of
-      Left err -> print err
-      Right val -> print val
+    evaled <- runIOThrows $ liftM show (readExpr input >>= eval env)
+    putStrLn evaled
     repl env
+
+
 
 main :: IO ()
 main = do
-  putStrLn "Welcome to Mini Lisp (Haskell)"
-  repl primitiveEnv
+    env <- primitiveEnv  -- Create a new environment
+    putStrLn "Welcome to Mini Lisp (Haskell)"
+    repl env

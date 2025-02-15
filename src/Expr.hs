@@ -1,5 +1,6 @@
 module Expr where
 
+import Data.IORef
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Monad.Except
@@ -31,7 +32,11 @@ instance Eq LispVal where
   _ == _ = False  -- Functions and different types are not comparable
 
 -- Environment for variable storage
-type Env = Map String LispVal
+type Env = IORef (Map String LispVal)
+
+-- Create a new environment
+nullEnv :: IO Env
+nullEnv = newIORef Map.empty
 
 -- Error handling
 data LispError
@@ -44,4 +49,14 @@ data LispError
     deriving (Show)
 
 type ThrowsError = Either LispError
+type IOThrowsError = ExceptT LispError IO
 
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = runExceptT action >>= return . extract
+  where
+    extract (Left err)  = "Error: " ++ show err
+    extract (Right val) = val
+
+liftThrows :: ThrowsError a -> IOThrowsError a
+liftThrows (Left err)  = throwError err
+liftThrows (Right val) = return val

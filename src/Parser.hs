@@ -31,7 +31,7 @@ parseExpr :: Parser LispVal
 parseExpr = parseAtom <|> parseNumber <|> parseBool <|> parseList
 
 -- Top-level function to run parser
-readExpr :: String -> ThrowsError LispVal
-readExpr input = case parse parseExpr "lisp" input of
-  Left err -> Left $ ParserError (show err)
-  Right val -> Right val
+readExpr :: String -> IOThrowsError LispVal
+readExpr input = liftThrows $ case parse parseExpr "lisp" input of
+    Left err -> Left $ ParserError (show err)
+    Right val -> Right val
