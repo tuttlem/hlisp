@@ -88,6 +88,13 @@ parseBool =
 parseList :: Parser LispVal
 parseList = List <$> between (char '(') (char ')') (sepBy (try parseExpr <|> parseString) spaces)
 
+parseQuote :: Parser LispVal
+parseQuote = do
+    char '\''  -- ✅ Match the single quote `'`
+    expr <- parseExpr  -- ✅ Parse the following expression
+    return $ List [Atom "quote", expr]  -- ✅ Convert to `(quote expr)`
+
+
 -- | Parses any valid Lisp expression.
 -- This includes numbers, booleans, strings, atoms, and lists.
 -- The use of `try` ensures that overlapping parsers backtrack properly.
@@ -96,7 +103,8 @@ parseExpr = try parseString
         <|> try parseNumber
         <|> try parseBool
         <|> try parseAtom
-        <|> parseList
+        <|> try parseList
+        <|> parseQuote
 
 -- | Parses a Lisp expression from a given string input.
 -- Wraps the parsing process in `IOThrowsError` to integrate with

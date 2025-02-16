@@ -12,6 +12,7 @@ data LispVal
     | Bool Bool
     | String String
     | List [LispVal]
+    | Pair LispVal LispVal
     | Lambda [String] LispVal Env
     | BuiltinFunc ([LispVal] -> ThrowsError LispVal)
 
@@ -22,6 +23,7 @@ instance Show LispVal where
   show (Bool False) = "#f"
   show (String s) = "\"" ++ s ++ "\""
   show (List xs) = "(" ++ unwords (map show xs) ++ ")"
+  show (Pair x y) = "(" ++ show x ++ " . " ++ show y ++ ")"
   show (Lambda params body _) =
     "(lambda (" ++ unwords params ++ ") " ++ show body ++ ")"
   show (BuiltinFunc _) = "<builtin function>"

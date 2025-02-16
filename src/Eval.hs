@@ -73,25 +73,6 @@ eval env (List (Atom func : args)) = do
 eval _ badForm = throwError $ BadSpecialForm "Unrecognized form" badForm
 
 
--- | Built-in function table
-primitives :: [(String, LispVal)]
-primitives =
-  [ ("+", BuiltinFunc numericAdd),
-    ("-", BuiltinFunc numericSub),
-    ("*", BuiltinFunc numericMul),
-    ("/", BuiltinFunc numericDiv),
-    ("<", BuiltinFunc compareLessThan),
-    (">", BuiltinFunc compareGreaterThan),
-    ("=", BuiltinFunc compareEquals),
-    ("<=", BuiltinFunc compareLessThanEq),
-    (">=", BuiltinFunc compareGreaterThanEq),
-    ("not", BuiltinFunc logicalNot),
-    ("and", BuiltinFunc logicalAnd),
-    ("or", BuiltinFunc logicalOr),
-    ("xor", BuiltinFunc logicalXor)
-  ]
-
-
 -- | Basic integer math
 numericAdd, numericSub, numericMul, numericDiv :: [LispVal] -> ThrowsError LispVal
 numericAdd [Number a, Number b] = Right $ Number (a + b)
@@ -150,6 +131,74 @@ isTruthy (Bool False) = False
 isTruthy (Number 0) = False
 isTruthy (String "") = False
 isTruthy _ = True
+
+cons :: [LispVal] -> ThrowsError LispVal
+cons [x, List xs] = return $ List (x : xs)
+cons [x, y]       = return $ Pair x y
+cons args         = throwError $ NumArgs 2 args
+
+car :: [LispVal] -> ThrowsError LispVal
+car [List (x : _)] = return x
+car [Pair x _]     = return x
+car [List []]      = throwError $ TypeMismatch "Cannot take car of empty list" (List [])
+car [arg]          = throwError $ TypeMismatch "Expected a pair or list" arg
+car args           = throwError $ NumArgs 1 args
+
+cdr :: [LispVal] -> ThrowsError LispVal
+cdr [List (_ : xs)] = return $ List xs
+cdr [Pair _ y]      = return y
+cdr [List []]       = throwError $ TypeMismatch "Cannot take cdr of empty list" (List [])
+cdr [arg]           = throwError $ TypeMismatch "Expected a pair or list" arg
+cdr args            = throwError $ NumArgs 1 args
+
+isNull :: [LispVal] -> ThrowsError LispVal
+isNull [List []] = return $ Bool True
+isNull [_]       = return $ Bool False
+isNull args      = throwError $ NumArgs 1 args
+
+-- | Append two lists together
+listAppend :: [LispVal] -> ThrowsError LispVal
+listAppend [List xs, List ys] = return $ List (xs ++ ys)
+listAppend [List xs, y] = return $ List (xs ++ [y])  -- ✅ Allow appending an item
+listAppend [x, List ys] = return $ List ([x] ++ ys)  -- ✅ Allow prepending an item
+listAppend args = throwError $ TypeMismatch "Expected two lists or a list and an element" (List args)
+
+-- | Get the length of a list
+listLength :: [LispVal] -> ThrowsError LispVal
+listLength [List xs] = return $ Number (toInteger (length xs))
+listLength [arg] = throwError $ TypeMismatch "Expected a list" arg
+listLength args = throwError $ NumArgs 1 args
+
+-- | Reverse a list
+listReverse :: [LispVal] -> ThrowsError LispVal
+listReverse [List xs] = return $ List (reverse xs)
+listReverse [arg] = throwError $ TypeMismatch "Expected a list" arg
+listReverse args = throwError $ NumArgs 1 args
+
+-- | Built-in function table
+primitives :: [(String, LispVal)]
+primitives =
+  [ ("+", BuiltinFunc numericAdd),
+    ("-", BuiltinFunc numericSub),
+    ("*", BuiltinFunc numericMul),
+    ("/", BuiltinFunc numericDiv),
+    ("<", BuiltinFunc compareLessThan),
+    (">", BuiltinFunc compareGreaterThan),
+    ("=", BuiltinFunc compareEquals),
+    ("<=", BuiltinFunc compareLessThanEq),
+    (">=", BuiltinFunc compareGreaterThanEq),
+    ("not", BuiltinFunc logicalNot),
+    ("and", BuiltinFunc logicalAnd),
+    ("or", BuiltinFunc logicalOr),
+    ("xor", BuiltinFunc logicalXor),
+    ("cons", BuiltinFunc cons),
+    ("car", BuiltinFunc car),
+    ("cdr", BuiltinFunc cdr),
+    ("null?", BuiltinFunc isNull),
+    ("append", BuiltinFunc listAppend),
+    ("length", BuiltinFunc listLength),
+    ("reverse", BuiltinFunc listReverse)
+  ]
 
 -- Initialize environment
 primitiveEnv :: IO Env
