@@ -88,6 +88,22 @@ parseBool =
 parseList :: Parser LispVal
 parseList = List <$> between (char '(') (char ')') (sepBy (try parseExpr <|> parseString) spaces)
 
+-- | Parses a quoted expression.
+-- Quoted expressions are prefixed with a single quote (`'`) and represent
+-- shorthand notation for `(quote <expr>)` in Lisp.
+--
+-- The parsed value is converted into the explicit `(quote <expr>)` form.
+--
+-- Examples:
+--
+-- >>> parseTest parseQuote "'x"
+-- List [Atom "quote", Atom "x"]
+--
+-- >>> parseTest parseQuote "'(1 2 3)"
+-- List [Atom "quote", List [Number 1, Number 2, Number 3]]
+--
+-- >>> parseTest parseQuote "'(+ 1 2)"
+-- List [Atom "quote", List [Atom "+", Number 1, Number 2]]
 parseQuote :: Parser LispVal
 parseQuote = do
     char '\''  -- ✅ Match the single quote `'`
