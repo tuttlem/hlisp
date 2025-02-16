@@ -59,9 +59,16 @@ eval env (List [Atom "quote", val]) = return val  -- Fixed
 eval env (List [Atom "define", Atom var, expr]) = do
     val <- eval env expr
     defineVar env var val
+eval _ val@(String _) = return val
 eval env (List [Atom "set!", Atom var, expr]) = do
     val <- eval env expr
     setVar env var val
+eval env (List [Atom "if", condition, thenExpr, elseExpr]) = do
+    result <- eval env condition
+    case result of
+        Bool True  -> return thenExpr  -- ✅ Return without evaluating again
+        Bool False -> return elseExpr  -- ✅ Return without evaluating again
+        _          -> throwError $ TypeMismatch "Expected boolean in if condition" result
 eval env (List (Atom func : args)) = do
     func' <- getVar env func  -- Look up function name in the environment
     args' <- mapM (eval env) args  -- Evaluate arguments
@@ -75,7 +82,16 @@ primitives =
   [ ("+", BuiltinFunc numericAdd),
     ("-", BuiltinFunc numericSub),
     ("*", BuiltinFunc numericMul),
-    ("/", BuiltinFunc numericDiv)
+    ("/", BuiltinFunc numericDiv),
+    ("<", BuiltinFunc numericLessThan),
+    (">", BuiltinFunc numericGreaterThan),
+    ("=", BuiltinFunc numericEquals),
+    ("<=", BuiltinFunc numericLessThanEq),
+    (">=", BuiltinFunc numericGreaterThanEq),
+    ("not", BuiltinFunc notFunc),
+    ("and", BuiltinFunc booleanAnd),
+    ("or", BuiltinFunc booleanOr),
+    ("xor", BuiltinFunc booleanXor)
   ]
 
 numericAdd, numericSub, numericMul, numericDiv :: [LispVal] -> ThrowsError LispVal
@@ -92,6 +108,41 @@ numericDiv [Number a, Number b] =
   if b == 0 then Left $ TypeMismatch "Division by zero" (Number b)
   else Right $ Number (a `div` b)
 numericDiv args = Left $ TypeMismatch "Expected numbers" (List args)
+
+numericLessThan, numericGreaterThan, numericEquals, numericLessThanEq, numericGreaterThanEq :: [LispVal] -> ThrowsError LispVal
+
+numericLessThan [Number a, Number b] = return $ Bool (a < b)
+numericLessThan args = throwError $ TypeMismatch "Expected numbers" (List args)
+
+numericGreaterThan [Number a, Number b] = return $ Bool (a > b)
+numericGreaterThan args = throwError $ TypeMismatch "Expected numbers" (List args)
+
+numericEquals [Number a, Number b] = return $ Bool (a == b)
+numericEquals [String a, String b] = return $ Bool (a == b)
+numericEquals args = throwError $ TypeMismatch "Expected numbers" (List args)
+
+numericLessThanEq [Number a, Number b] = return $ Bool (a <= b)
+numericLessThanEq args = throwError $ TypeMismatch "Expected numbers" (List args)
+
+numericGreaterThanEq [Number a, Number b] = return $ Bool (a >= b)
+numericGreaterThanEq args = throwError $ TypeMismatch "Expected numbers" (List args)
+
+notFunc :: [LispVal] -> ThrowsError LispVal
+notFunc [Bool b] = return $ Bool (not b)
+notFunc [val] = throwError $ TypeMismatch "Expected boolean" val
+notFunc args = throwError $ NumArgs 1 args
+
+booleanAnd, booleanOr, booleanXor :: [LispVal] -> ThrowsError LispVal
+booleanAnd args = return $ Bool (all isTruthy args)
+booleanOr args = return $ Bool (any isTruthy args)
+booleanXor args =
+    let countTrue = length (filter isTruthy args)
+    in return $ Bool (countTrue == 1)
+
+-- Helper function to determine truthiness
+isTruthy :: LispVal -> Bool
+isTruthy (Bool False) = False
+isTruthy _ = True
 
 -- Initialize environment
 primitiveEnv :: IO Env

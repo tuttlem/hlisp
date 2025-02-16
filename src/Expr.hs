@@ -10,6 +10,7 @@ data LispVal
     = Atom String
     | Number Integer
     | Bool Bool
+    | String String
     | List [LispVal]
     | Lambda [String] LispVal Env -- user-defined function
     | BuiltinFunc ([LispVal] -> ThrowsError LispVal) -- built-in functions
@@ -19,6 +20,7 @@ instance Show LispVal where
   show (Number n) = show n
   show (Bool True) = "#t"
   show (Bool False) = "#f"
+  show (String s) = "\"" ++ s ++ "\""
   show (List xs) = "(" ++ unwords (map show xs) ++ ")"
   show (Lambda params body _) =
     "(lambda (" ++ unwords params ++ ") " ++ show body ++ ")"

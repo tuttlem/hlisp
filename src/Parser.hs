@@ -1,9 +1,11 @@
 module Parser where
 
+import Debug.Trace
 import Text.Parsec
 import Text.Parsec.String (Parser)
 import Expr
 import Control.Monad
+import Control.Monad.IO.Class (liftIO)
 import Numeric
 
 -- Parse an atom (symbol)
@@ -17,6 +19,13 @@ parseAtom = do
 parseNumber :: Parser LispVal
 parseNumber = Number . read <$> many1 digit
 
+parseString :: Parser LispVal
+parseString = do
+    char '"'  -- Match opening quote
+    str <- many (noneOf "\"")  -- Match everything until the closing quote
+    char '"'  -- Match closing quote
+    return $ String str  -- Return LispVal String
+
 -- Parse booleans
 parseBool :: Parser LispVal
 parseBool =
@@ -24,14 +33,18 @@ parseBool =
 
 -- Parse lists
 parseList :: Parser LispVal
-parseList = List <$> between (char '(') (char ')') (sepBy parseExpr spaces)
+parseList = List <$> between (char '(') (char ')') (sepBy (try parseExpr <|> parseString) spaces)
 
 -- General parser for any expression
 parseExpr :: Parser LispVal
-parseExpr = parseAtom <|> parseNumber <|> parseBool <|> parseList
+parseExpr = try parseString
+        <|> try parseNumber
+        <|> try parseBool
+        <|> try parseAtom
+        <|> parseList
 
 -- Top-level function to run parser
 readExpr :: String -> IOThrowsError LispVal
 readExpr input = liftThrows $ case parse parseExpr "lisp" input of
-    Left err -> Left $ ParserError (show err)
+    Left err  -> Left $ ParserError (show err)
     Right val -> Right val
