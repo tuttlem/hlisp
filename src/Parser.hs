@@ -29,7 +29,9 @@ parseString = do
 -- Parse booleans
 parseBool :: Parser LispVal
 parseBool =
-  (string "#t" >> return (Bool True)) <|> (string "#f" >> return (Bool False))
+    try (string "#t" >> return (Bool True)) <|>
+    try (string "#f" >> return (Bool False))
+
 
 -- Parse lists
 parseList :: Parser LispVal
