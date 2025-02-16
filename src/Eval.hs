@@ -1,10 +1,13 @@
 module Eval where
 
 import Expr
+import Control.Monad (filterM, foldM)
 import Control.Monad.Except
 import Control.Monad.IO.Class (liftIO)
 import Data.IORef (IORef, readIORef, writeIORef, newIORef)
+import Data.List (sortBy)
 import qualified Data.Map as Map
+
 
 -- Look up variable in environment
 lookupVar :: Env -> String -> IOThrowsError LispVal
@@ -40,10 +43,14 @@ getVar envRef var = do
 -- Apply a function (either built-in or user-defined)
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (BuiltinFunc f) args = liftThrows $ f args
+apply (BuiltinFuncIO f) args = f args
 apply (Lambda params body closure) args = do
     env <- liftIO $ readIORef closure
     if length params == length args
-        then eval closure body
+        then do
+            let localEnv = Map.union (Map.fromList (zip params args)) env
+            newEnvRef <- liftIO $ newIORef localEnv
+            eval newEnvRef body
         else throwError $ NumArgs (length params) args
 apply notFunc _ = throwError $ NotAFunction (show notFunc)
 
@@ -66,6 +73,13 @@ eval env (List [Atom "if", condition, thenExpr, elseExpr]) = do
         Bool True  -> return thenExpr
         Bool False -> return elseExpr
         _          -> throwError $ TypeMismatch "Expected boolean in if condition" result
+eval env (List [Atom "lambda", List params, body]) =
+    case mapM getParamName params of
+        Right paramNames -> return $ Lambda paramNames body env
+        Left err -> throwError err
+  where
+    getParamName (Atom name) = Right name
+    getParamName badArg = Left $ TypeMismatch "Expected parameter name" badArg
 eval env (List (Atom func : args)) = do
     func' <- getVar env func
     args' <- mapM (eval env) args
@@ -159,9 +173,10 @@ isNull args      = throwError $ NumArgs 1 args
 -- | Append two lists together
 listAppend :: [LispVal] -> ThrowsError LispVal
 listAppend [List xs, List ys] = return $ List (xs ++ ys)
-listAppend [List xs, y] = return $ List (xs ++ [y])  -- ✅ Allow appending an item
-listAppend [x, List ys] = return $ List ([x] ++ ys)  -- ✅ Allow prepending an item
-listAppend args = throwError $ TypeMismatch "Expected two lists or a list and an element" (List args)
+listAppend [String a, String b] = return $ String (a ++ b)
+listAppend [List xs, y] = return $ List (xs ++ [y])
+listAppend [x, List ys] = return $ List ([x] ++ ys)
+listAppend args = throwError $ TypeMismatch "Expected two lists or two strings" (List args)
 
 -- | Get the length of a list
 listLength :: [LispVal] -> ThrowsError LispVal
@@ -175,6 +190,80 @@ listReverse [List xs] = return $ List (reverse xs)
 listReverse [arg] = throwError $ TypeMismatch "Expected a list" arg
 listReverse args = throwError $ NumArgs 1 args
 
+listMap :: [LispVal] -> IOThrowsError LispVal
+listMap [BuiltinFunc f, List xs] = liftThrows $ List <$> mapM (\x -> f [x]) xs
+listMap [Lambda params body env, List xs] =
+    List <$> mapM (\x -> apply (Lambda params body env) [x]) xs
+listMap args = throwError $ TypeMismatch "Expected a function and a list" (List args)
+
+listFilter :: [LispVal] -> IOThrowsError LispVal
+listFilter [func@(Lambda _ _ _), List xs] = do
+    filtered <- filterM (\x -> do
+        result <- apply func [x]
+        case result of
+            Bool True  -> return True
+            Bool False -> return False
+            _          -> throwError $ TypeMismatch "Expected boolean return" result
+        ) xs
+    return $ List filtered
+listFilter [func@(BuiltinFunc _), List xs] = do
+    filtered <- filterM (\x -> do
+        result <- apply func [x]
+        case result of
+            Bool True  -> return True
+            Bool False -> return False
+            _          -> throwError $ TypeMismatch "Expected boolean return" result
+        ) xs
+    return $ List filtered
+listFilter args = throwError $ TypeMismatch "Expected a function and a list" (List args)
+
+listFoldL :: [LispVal] -> IOThrowsError LispVal
+listFoldL [BuiltinFunc f, initial, List xs] =
+    liftThrows $ foldM (\acc x -> f [acc, x]) initial xs
+listFoldL [Lambda params body env, initial, List xs] =
+    foldM (\acc x -> apply (Lambda params body env) [acc, x]) initial xs
+listFoldL args = throwError $ TypeMismatch "Expected a function, initial value, and a list" (List args)
+
+listFoldR :: [LispVal] -> IOThrowsError LispVal
+listFoldR [BuiltinFunc f, initial, List xs] =
+    liftThrows $ foldM (\acc x -> f [x, acc]) initial (reverse xs)
+listFoldR [Lambda params body env, initial, List xs] =
+    foldM (\acc x -> apply (Lambda params body env) [x, acc]) initial (reverse xs)
+listFoldR args = throwError $ TypeMismatch "Expected a function, initial value, and a list" (List args)
+
+listSort :: [LispVal] -> ThrowsError LispVal
+listSort [List xs] =
+    case xs of
+        [] -> return $ List []
+        (Number _:_) -> return $ List (sortBy compareNumbers xs)
+        (String _:_) -> return $ List (sortBy compareStrings xs)
+        _ -> throwError $ TypeMismatch "Cannot sort mixed types" (List xs)
+  where
+    compareNumbers (Number a) (Number b) = compare a b
+    compareStrings (String a) (String b) = compare a b
+
+listSort [Lambda params body closure, List xs] =
+    case xs of
+        [] -> return $ List []
+        _  -> throwError $ TypeMismatch "Custom sorting requires ThrowsErrorIO" (List xs)
+        -- If you later want custom sorting, you'd need `ThrowsErrorIO`
+listSort args = throwError $ TypeMismatch "Expected a list (optionally with a comparator function)" (List args)
+
+stringToList :: [LispVal] -> ThrowsError LispVal
+stringToList [String s] = return $ List (map (String . (:[])) s)  -- Convert each char into a single-char string
+stringToList [arg] = throwError $ TypeMismatch "Expected a string" arg
+stringToList args = throwError $ NumArgs 1 args
+
+listToString :: [LispVal] -> ThrowsError LispVal
+listToString [List chars] = case mapM extractChar chars of
+    Right strList -> return $ String (concat strList)
+    Left err -> throwError err
+  where
+    extractChar (String [c]) = Right [c]  -- Ensure it's a single-character string
+    extractChar invalid = Left $ TypeMismatch "Expected a list of single-character strings" invalid
+listToString [arg] = throwError $ TypeMismatch "Expected a list of characters" arg
+listToString args = throwError $ NumArgs 1 args
+
 -- | Built-in function table
 primitives :: [(String, LispVal)]
 primitives =
@@ -182,6 +271,7 @@ primitives =
     ("-", BuiltinFunc numericSub),
     ("*", BuiltinFunc numericMul),
     ("/", BuiltinFunc numericDiv),
+
     ("<", BuiltinFunc compareLessThan),
     (">", BuiltinFunc compareGreaterThan),
     ("=", BuiltinFunc compareEquals),
@@ -191,13 +281,23 @@ primitives =
     ("and", BuiltinFunc logicalAnd),
     ("or", BuiltinFunc logicalOr),
     ("xor", BuiltinFunc logicalXor),
+
     ("cons", BuiltinFunc cons),
     ("car", BuiltinFunc car),
     ("cdr", BuiltinFunc cdr),
     ("null?", BuiltinFunc isNull),
+
     ("append", BuiltinFunc listAppend),
     ("length", BuiltinFunc listLength),
-    ("reverse", BuiltinFunc listReverse)
+    ("reverse", BuiltinFunc listReverse),
+    ("sort", BuiltinFunc listSort),
+    ("map", BuiltinFuncIO listMap),
+    ("filter", BuiltinFuncIO listFilter),
+    ("foldl", BuiltinFuncIO listFoldL),
+    ("foldr", BuiltinFuncIO listFoldR),
+
+    ("string->list", BuiltinFunc stringToList),
+    ("list->string", BuiltinFunc listToString)
   ]
 
 -- Initialize environment

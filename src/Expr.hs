@@ -15,6 +15,7 @@ data LispVal
     | Pair LispVal LispVal
     | Lambda [String] LispVal Env
     | BuiltinFunc ([LispVal] -> ThrowsError LispVal)
+    | BuiltinFuncIO ([LispVal] -> IOThrowsError LispVal)
 
 instance Show LispVal where
   show (Atom name) = name
@@ -27,6 +28,7 @@ instance Show LispVal where
   show (Lambda params body _) =
     "(lambda (" ++ unwords params ++ ") " ++ show body ++ ")"
   show (BuiltinFunc _) = "<builtin function>"
+  show (BuiltinFuncIO _) = "<builtin function>"
 
 instance Eq LispVal where
   (Atom a) == (Atom b) = a == b
