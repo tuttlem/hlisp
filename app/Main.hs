@@ -13,11 +13,9 @@ repl env = do
   hFlush stdout
   input <- getLine
   unless (input == "exit") $ do
-    evaled <- runIOThrows $ liftM show (readExpr input >>= eval env)
-    putStrLn evaled
+    result <- runIOThrows (liftM show (readExpr input >>= eval env))
+    putStrLn result
     repl env
-
-
 
 main :: IO ()
 main = do

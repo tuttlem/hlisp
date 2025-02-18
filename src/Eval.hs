@@ -250,6 +250,9 @@ isTruthy (Number 0) = False
 isTruthy (String "") = False
 isTruthy _ = True
 
+listBuiltin :: [LispVal] -> ThrowsError LispVal
+listBuiltin args = return $ List args
+
 cons :: [LispVal] -> ThrowsError LispVal
 cons [x, List xs] = return $ List (x : xs)
 cons [x, y]       = return $ Pair x y
@@ -353,6 +356,15 @@ listSort [Lambda params body closure, List xs] =
         -- If you later want custom sorting, you'd need `ThrowsErrorIO`
 listSort args = throwError $ TypeMismatch "Expected a list (optionally with a comparator function)" (List args)
 
+stringJoinBuiltin :: [LispVal] -> ThrowsError LispVal
+stringJoinBuiltin [List xs] = do
+    strList <- mapM ensureString xs
+    return $ String (concat strList)
+  where
+    ensureString (String s) = return s
+    ensureString val        = return (show val) -- Convert non-strings to string
+stringJoinBuiltin args = throwError $ TypeMismatch "Expected a list of strings" (List args)
+
 stringToList :: [LispVal] -> ThrowsError LispVal
 stringToList [String s] = return $ List (map (String . (:[])) s)  -- Convert each char into a single-char string
 stringToList [arg] = throwError $ TypeMismatch "Expected a string" arg
@@ -367,6 +379,25 @@ listToString [List chars] = case mapM extractChar chars of
     extractChar invalid = Left $ TypeMismatch "Expected a list of single-character strings" invalid
 listToString [arg] = throwError $ TypeMismatch "Expected a list of characters" arg
 listToString args = throwError $ NumArgs 1 args
+
+printFunc :: [LispVal] -> IOThrowsError LispVal
+printFunc [arg] = do
+    liftIO $ putStrLn (show arg)
+    return $ Bool True
+printFunc args = throwError $ TypeMismatch "Expected a single argument" (List args)
+
+readLineFunc :: [LispVal] -> IOThrowsError LispVal
+readLineFunc [] = do
+    input <- liftIO getLine
+    return $ String input
+readLineFunc args = throwError $ TypeMismatch "Expected no arguments" (List args)
+
+formatBuiltin :: [LispVal] -> ThrowsError LispVal
+formatBuiltin [String fmt, val] =
+    case fmt of
+        "~a" -> return $ String (show val)
+        _    -> throwError $ TypeMismatch "Unsupported format string" (String fmt)
+formatBuiltin args = throwError $ TypeMismatch "Expected format string and value" (List args)
 
 -- | Built-in function table
 primitives :: [(String, LispVal)]
@@ -393,6 +424,7 @@ primitives =
     ("or", BuiltinFunc logicalOr),
     ("xor", BuiltinFunc logicalXor),
 
+    ("list", BuiltinFunc listBuiltin),
     ("cons", BuiltinFunc cons),
     ("car", BuiltinFunc car),
     ("cdr", BuiltinFunc cdr),
@@ -407,8 +439,13 @@ primitives =
     ("foldl", BuiltinFuncIO listFoldL),
     ("foldr", BuiltinFuncIO listFoldR),
 
+    ("string-join", BuiltinFunc stringJoinBuiltin),
     ("string->list", BuiltinFunc stringToList),
-    ("list->string", BuiltinFunc listToString)
+    ("list->string", BuiltinFunc listToString),
+    ("format", BuiltinFunc formatBuiltin),
+
+    ("print", BuiltinFuncIO printFunc),
+    ("read-line", BuiltinFuncIO readLineFunc)
   ]
 
 -- Initialize environment
