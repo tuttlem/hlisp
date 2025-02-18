@@ -9,6 +9,7 @@ import Control.Monad.Except
 data LispVal
     = Atom String
     | Number Integer
+    | Float Double
     | Bool Bool
     | String String
     | List [LispVal]
@@ -20,6 +21,7 @@ data LispVal
 instance Show LispVal where
   show (Atom name) = name
   show (Number n) = show n
+  show (Float f) = show f
   show (Bool True) = "#t"
   show (Bool False) = "#f"
   show (String s) = "\"" ++ s ++ "\""

@@ -1,6 +1,6 @@
 module Parser where
 
-import Debug.Trace
+import Numeric (readFloat, readDec)
 import Text.Parsec
 import Text.Parsec.String (Parser)
 import Expr
@@ -26,16 +26,44 @@ parseAtom = do
     rest <- many (letter <|> digit <|> oneOf "!$%&|*+-/:<=>?@^_~")
     return $ Atom (first : rest)
 
--- | Parses a number.
--- Currently, only decimal integer literals are supported.
+-- | Parses an integer.
 --
 -- Examples:
 --
--- >>> parseTest parseNumber "123"
+-- >>> parseTest parseInteger "123"
 -- Number 123
 --
+parseInteger :: Parser LispVal
+parseInteger = do
+    sign <- optionMaybe (char '-')  -- Look for optional '-'
+    digits <- many1 digit
+    let number = read digits
+    return $ Number $ case sign of
+        Just _  -> -number
+        Nothing -> number
+
+-- | Parses a float.
+--
+-- Examples:
+--
+-- >>> parseTest parseFloat "123.24"
+-- Float 123.24
+--
+parseFloat :: Parser LispVal
+parseFloat = do
+    sign <- optionMaybe (char '-')  -- Look for optional '-'
+    whole <- many1 digit
+    char '.'
+    fractional <- many1 digit
+    let number = read (whole ++ "." ++ fractional)
+    return $ Float $ case sign of
+        Just _  -> -number
+        Nothing -> number
+
+-- | Parses a number
+--
 parseNumber :: Parser LispVal
-parseNumber = Number . read <$> many1 digit
+parseNumber = try parseFloat <|> parseInteger
 
 -- | Parses a string.
 -- Strings are enclosed in double quotes (`"`), and can contain any characters
@@ -106,9 +134,9 @@ parseList = List <$> between (char '(') (char ')') (sepBy (try parseExpr <|> par
 -- List [Atom "quote", List [Atom "+", Number 1, Number 2]]
 parseQuote :: Parser LispVal
 parseQuote = do
-    char '\''  -- ✅ Match the single quote `'`
-    expr <- parseExpr  -- ✅ Parse the following expression
-    return $ List [Atom "quote", expr]  -- ✅ Convert to `(quote expr)`
+    char '\''
+    expr <- parseExpr
+    return $ List [Atom "quote", expr]
 
 
 -- | Parses any valid Lisp expression.

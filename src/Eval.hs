@@ -58,6 +58,7 @@ apply notFunc _ = throwError $ NotAFunction (show notFunc)
 eval :: Env -> LispVal -> IOThrowsError LispVal
 eval env (Atom var) = getVar env var
 eval _ val@(Number _) = return val
+eval _ val@(Float _) = return val
 eval _ val@(Bool _) = return val
 eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "define", Atom var, expr]) = do
@@ -87,44 +88,112 @@ eval env (List (Atom func : args)) = do
 eval _ badForm = throwError $ BadSpecialForm "Unrecognized form" badForm
 
 
--- | Basic integer math
+-- | Basic math
 numericAdd, numericSub, numericMul, numericDiv :: [LispVal] -> ThrowsError LispVal
-numericAdd [Number a, Number b] = Right $ Number (a + b)
-numericAdd args = Left $ TypeMismatch "Expected numbers" (List args)
+numericAdd [Number a, Number b] = return $ Number (a + b)
+numericAdd [Float a, Float b] = return $ Float (a + b)
+numericAdd [Number a, Float b] = return $ Float (fromIntegral a + b)
+numericAdd [Float a, Number b] = return $ Float (a + fromIntegral b)
+numericAdd args = throwError $ TypeMismatch "Expected numbers" (List args)
 
-numericSub [Number a, Number b] = Right $ Number (a - b)
-numericSub args = Left $ TypeMismatch "Expected numbers" (List args)
+numericSub [Number a, Number b] = return $ Number (a - b)
+numericSub [Float a, Float b] = return $ Float (a - b)
+numericSub [Number a, Float b] = return $ Float (fromIntegral a - b)
+numericSub [Float a, Number b] = return $ Float (a - fromIntegral b)
+numericSub args = throwError $ TypeMismatch "Expected numbers" (List args)
 
-numericMul [Number a, Number b] = Right $ Number (a * b)
-numericMul args = Left $ TypeMismatch "Expected numbers" (List args)
+numericMul [Number a, Number b] = return $ Number (a * b)
+numericMul [Float a, Float b] = return $ Float (a * b)
+numericMul [Number a, Float b] = return $ Float (fromIntegral a * b)
+numericMul [Float a, Number b] = return $ Float (a * fromIntegral b)
+numericMul args = throwError $ TypeMismatch "Expected numbers" (List args)
 
-numericDiv [Number a, Number b] =
-  if b == 0 then Left $ TypeMismatch "Division by zero" (Number b)
-  else Right $ Number (a `div` b)
-numericDiv args = Left $ TypeMismatch "Expected numbers" (List args)
+numericDiv [Number a, Number b]
+    | b == 0    = throwError $ TypeMismatch "Division by zero" (Number b)
+    | a `mod` b == 0 = return $ Number (a `div` b)
+    | otherwise = return $ Float (fromIntegral a / fromIntegral b)
+numericDiv [Float a, Float b]
+    | b == 0    = throwError $ TypeMismatch "Division by zero" (Float b)
+    | otherwise = return $ Float (a / b)
+numericDiv [Number a, Float b]
+    | b == 0    = throwError $ TypeMismatch "Division by zero" (Float b)
+    | otherwise = return $ Float (fromIntegral a / b)
+numericDiv [Float a, Number b]
+    | b == 0    = throwError $ TypeMismatch "Division by zero" (Number b)
+    | otherwise = return $ Float (a / fromIntegral b)
+numericDiv args = throwError $ TypeMismatch "Expected numbers" (List args)
+
+numericSin, numericCos, numericTan, numericExp, numericLog, numericSqrt :: [LispVal] -> ThrowsError LispVal
+numericSin [Number a] = return $ Float (sin (fromIntegral a))
+numericSin [Float a]  = return $ Float (sin a)
+numericSin [arg]      = throwError $ TypeMismatch "Expected a number" arg
+numericSin args       = throwError $ NumArgs 1 args
+
+numericCos [Number a] = return $ Float (cos (fromIntegral a))
+numericCos [Float a]  = return $ Float (cos a)
+numericCos [arg]      = throwError $ TypeMismatch "Expected a number" arg
+numericCos args       = throwError $ NumArgs 1 args
+
+numericTan [Number a] = return $ Float (tan (fromIntegral a))
+numericTan [Float a]  = return $ Float (tan a)
+numericTan [arg]      = throwError $ TypeMismatch "Expected a number" arg
+numericTan args       = throwError $ NumArgs 1 args
+
+numericExp [Number a] = return $ Float (exp (fromIntegral a))
+numericExp [Float a]  = return $ Float (exp a)
+numericExp [arg]      = throwError $ TypeMismatch "Expected a number" arg
+numericExp args       = throwError $ NumArgs 1 args
+
+numericLog [Number a] =
+    if a <= 0 then throwError $ TypeMismatch "Logarithm requires positive number" (Number a)
+    else return $ Float (log (fromIntegral a))
+numericLog [Float a] =
+    if a <= 0 then throwError $ TypeMismatch "Logarithm requires positive number" (Float a)
+    else return $ Float (log a)
+numericLog [arg]      = throwError $ TypeMismatch "Expected a number" arg
+numericLog args       = throwError $ NumArgs 1 args
+
+numericSqrt [Number a] =
+    if a < 0 then throwError $ TypeMismatch "Square root requires non-negative number" (Number a)
+    else return $ Float (sqrt (fromIntegral a))
+numericSqrt [Float a] =
+    if a < 0 then throwError $ TypeMismatch "Square root requires non-negative number" (Float a)
+    else return $ Float (sqrt a)
+numericSqrt [arg]      = throwError $ TypeMismatch "Expected a number" arg
+numericSqrt args       = throwError $ NumArgs 1 args
 
 -- | General Comparison Functions
 compareLessThan, compareGreaterThan, compareEquals, compareLessThanEq, compareGreaterThanEq :: [LispVal] -> ThrowsError LispVal
 
 compareLessThan [Number a, Number b] = return $ Bool (a < b)
-compareLessThan [String a, String b] = return $ Bool (a < b)
-compareLessThan args = throwError $ TypeMismatch "Expected numbers or strings" (List args)
+compareLessThan [Float a, Float b] = return $ Bool (a < b)
+compareLessThan [Number a, Float b] = return $ Bool (fromIntegral a < b)
+compareLessThan [Float a, Number b] = return $ Bool (a < fromIntegral b)
+compareLessThan args = throwError $ TypeMismatch "Expected numbers" (List args)
 
 compareGreaterThan [Number a, Number b] = return $ Bool (a > b)
-compareGreaterThan [String a, String b] = return $ Bool (a > b)
-compareGreaterThan args = throwError $ TypeMismatch "Expected numbers or strings" (List args)
+compareGreaterThan [Float a, Float b] = return $ Bool (a > b)
+compareGreaterThan [Number a, Float b] = return $ Bool (fromIntegral a > b)
+compareGreaterThan [Float a, Number b] = return $ Bool (a > fromIntegral b)
+compareGreaterThan args = throwError $ TypeMismatch "Expected numbers" (List args)
 
 compareEquals [Number a, Number b] = return $ Bool (a == b)
-compareEquals [String a, String b] = return $ Bool (a == b)
-compareEquals args = throwError $ TypeMismatch "Expected numbers or strings" (List args)
+compareEquals [Float a, Float b] = return $ Bool (a == b)
+compareEquals [Number a, Float b] = return $ Bool (fromIntegral a == b)
+compareEquals [Float a, Number b] = return $ Bool (a == fromIntegral b)
+compareEquals args = throwError $ TypeMismatch "Expected numbers" (List args)
 
 compareLessThanEq [Number a, Number b] = return $ Bool (a <= b)
-compareLessThanEq [String a, String b] = return $ Bool (a <= b)
-compareLessThanEq args = throwError $ TypeMismatch "Expected numbers or strings" (List args)
+compareLessThanEq [Float a, Float b] = return $ Bool (a <= b)
+compareLessThanEq [Number a, Float b] = return $ Bool (fromIntegral a <= b)
+compareLessThanEq [Float a, Number b] = return $ Bool (a <= fromIntegral b)
+compareLessThanEq args = throwError $ TypeMismatch "Expected numbers" (List args)
 
 compareGreaterThanEq [Number a, Number b] = return $ Bool (a >= b)
-compareGreaterThanEq [String a, String b] = return $ Bool (a >= b)
-compareGreaterThanEq args = throwError $ TypeMismatch "Expected numbers or strings" (List args)
+compareGreaterThanEq [Float a, Float b] = return $ Bool (a >= b)
+compareGreaterThanEq [Number a, Float b] = return $ Bool (fromIntegral a >= b)
+compareGreaterThanEq [Float a, Number b] = return $ Bool (a >= fromIntegral b)
+compareGreaterThanEq args = throwError $ TypeMismatch "Expected numbers" (List args)
 
 -- | Boolean Logic Functions
 logicalNot :: [LispVal] -> ThrowsError LispVal
@@ -271,6 +340,13 @@ primitives =
     ("-", BuiltinFunc numericSub),
     ("*", BuiltinFunc numericMul),
     ("/", BuiltinFunc numericDiv),
+
+    ("sin", BuiltinFunc numericSin),
+    ("cos", BuiltinFunc numericCos),
+    ("tan", BuiltinFunc numericTan),
+    ("exp", BuiltinFunc numericExp),
+    ("log", BuiltinFunc numericLog),
+    ("sqrt", BuiltinFunc numericSqrt),
 
     ("<", BuiltinFunc compareLessThan),
     (">", BuiltinFunc compareGreaterThan),
