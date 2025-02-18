@@ -1,10 +1,12 @@
 module Eval where
 
+import Debug.Trace
 import Expr
 import Control.Monad (filterM, foldM)
 import Control.Monad.Except
 import Control.Monad.IO.Class (liftIO)
-import Data.IORef (IORef, readIORef, writeIORef, newIORef)
+import Data.Typeable (typeOf)
+import Data.IORef (IORef, readIORef, writeIORef, newIORef, modifyIORef)
 import Data.List (sortBy)
 import qualified Data.Map as Map
 
@@ -40,6 +42,31 @@ getVar envRef var = do
         Just val -> return val
         Nothing  -> throwError $ UnboundVar ("Undefined variable: " ++ var)
 
+
+evalLet :: Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
+evalLet env bindings body = do
+    -- Extend environment with bindings
+    newEnv <- extendEnv env bindings
+    -- Evaluate body in the extended environment
+    evalSequence newEnv body
+
+extendEnv :: Env -> [LispVal] -> IOThrowsError Env
+extendEnv envRef bindings = do
+    env <- liftIO $ readIORef envRef
+    newBindings <- mapM evalBinding bindings
+    liftIO $ newIORef (Map.union (Map.fromList newBindings) env)
+  where
+    evalBinding (List [Atom var, expr]) = do
+        val <- eval envRef expr
+        return (var, val)
+    evalBinding badForm = throwError $ BadSpecialForm "Invalid let binding" badForm
+
+evalSequence :: Env -> [LispVal] -> IOThrowsError LispVal
+evalSequence env [expr] = eval env expr
+evalSequence env (expr:rest) = eval env expr >> evalSequence env rest
+evalSequence _ [] = throwError $ BadSpecialForm "Empty let body" (List [])
+
+
 -- Apply a function (either built-in or user-defined)
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (BuiltinFunc f) args = liftThrows $ f args
@@ -71,6 +98,18 @@ eval env (List [Atom "define", List (Atom funcName : params), body]) = do
     extractParam (Atom name) = name
     extractParam nonAtom = error $ "Expected parameter name, got: " ++ show nonAtom
 eval _ val@(String _) = return val
+eval env (List (Atom "let" : List bindings : body)) = do
+    newEnv <- extendEnv env bindings
+    last <$> mapM (eval newEnv) body
+  where
+    extendEnv :: Env -> [LispVal] -> IOThrowsError Env
+    extendEnv envRef [] = return envRef
+    extendEnv envRef (List [Atom var, expr] : rest) = do
+        val <- eval envRef expr
+        env <- liftIO $ readIORef envRef
+        newEnvRef <- liftIO $ newIORef (Map.insert var val env)
+        extendEnv newEnvRef rest
+    extendEnv _ badForm = throwError $ BadSpecialForm "Invalid let binding" (List badForm)
 eval env (List [Atom "set!", Atom var, expr]) = do
     val <- eval env expr
     setVar env var val
@@ -91,7 +130,22 @@ eval env (List (Atom func : args)) = do
     func' <- getVar env func
     args' <- mapM (eval env) args
     apply func' args'
-eval _ badForm = throwError $ BadSpecialForm "Unrecognized form" badForm
+eval _ badForm = do
+    let typeName = case badForm of
+            Atom name  -> "Atom: " ++ name
+            Number n   -> "Number: " ++ show n
+            Float f    -> "Float: " ++ show f
+            Bool b     -> "Bool: " ++ show b
+            String s   -> "String: " ++ show s
+            List []    -> "Empty List"
+            List (x:_) -> "List (first element: " ++ show x ++ ")"
+            Pair a b   -> "Pair: (" ++ show a ++ " . " ++ show b ++ ")"
+            Lambda _ _ _ -> "Lambda Function"
+            BuiltinFunc _ -> "Builtin Function"
+            BuiltinFuncIO _ -> "Builtin IO Function"
+    throwError $ BadSpecialForm ("Unrecognized form of type: " ++ typeName) badForm
+
+
 
 
 -- | Basic math
