@@ -64,6 +64,12 @@ eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "define", Atom var, expr]) = do
     val <- eval env expr
     defineVar env var val
+eval env (List [Atom "define", List (Atom funcName : params), body]) = do
+    let paramNames = map extractParam params
+    defineVar env funcName (Lambda paramNames body env)
+  where
+    extractParam (Atom name) = name
+    extractParam nonAtom = error $ "Expected parameter name, got: " ++ show nonAtom
 eval _ val@(String _) = return val
 eval env (List [Atom "set!", Atom var, expr]) = do
     val <- eval env expr
@@ -71,8 +77,8 @@ eval env (List [Atom "set!", Atom var, expr]) = do
 eval env (List [Atom "if", condition, thenExpr, elseExpr]) = do
     result <- eval env condition
     case result of
-        Bool True  -> return thenExpr
-        Bool False -> return elseExpr
+        Bool True  -> eval env thenExpr
+        Bool False -> eval env elseExpr
         _          -> throwError $ TypeMismatch "Expected boolean in if condition" result
 eval env (List [Atom "lambda", List params, body]) =
     case mapM getParamName params of

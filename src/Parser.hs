@@ -26,6 +26,7 @@ parseAtom = do
     rest <- many (letter <|> digit <|> oneOf "!$%&|*+-/:<=>?@^_~")
     return $ Atom (first : rest)
 
+
 -- | Parses an integer.
 --
 -- Examples:
