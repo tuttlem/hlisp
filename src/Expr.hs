@@ -54,7 +54,7 @@ data LispError
     | NotAFunction String
     | NumArgs Int [LispVal]
     | ParserError String
-    deriving (Show)
+    deriving (Show, Eq)
 
 type ThrowsError = Either LispError
 type IOThrowsError = ExceptT LispError IO
