@@ -9,7 +9,7 @@ import Data.Typeable (typeOf)
 import Data.IORef (IORef, readIORef, writeIORef, newIORef, modifyIORef)
 import Data.List (sortBy)
 import qualified Data.Map as Map
-
+import System.IO (hFlush, stdout)
 
 -- Look up variable in environment
 lookupVar :: Env -> String -> IOThrowsError LispVal
@@ -66,9 +66,11 @@ eval env (List [Atom "quote", val]) = return val
 eval env (List [Atom "define", Atom var, expr]) = do
     val <- eval env expr
     defineVar env var val
+    return $ Bool True
 eval env (List [Atom "define", List (Atom funcName : params), body]) = do
     let paramNames = map extractParam params
     defineVar env funcName (Lambda paramNames body env)
+    return $ Bool True
   where
     extractParam (Atom name) = name
     extractParam nonAtom = error $ "Expected parameter name, got: " ++ show nonAtom
@@ -381,10 +383,18 @@ listToString [arg] = throwError $ TypeMismatch "Expected a list of characters" a
 listToString args = throwError $ NumArgs 1 args
 
 printFunc :: [LispVal] -> IOThrowsError LispVal
+printFunc [String s] = do
+    liftIO $ putStrLn s  -- Print raw string without quotes
+    return $ Bool True
 printFunc [arg] = do
-    liftIO $ putStrLn (show arg)
+    liftIO $ putStrLn (showLisp arg)  -- Use custom showLisp function
     return $ Bool True
 printFunc args = throwError $ TypeMismatch "Expected a single argument" (List args)
+
+-- Custom show function that removes quotes from strings
+showLisp :: LispVal -> String
+showLisp (String s) = s  -- Print without quotes
+showLisp other = show other  -- Default behavior for other types
 
 readLineFunc :: [LispVal] -> IOThrowsError LispVal
 readLineFunc [] = do

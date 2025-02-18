@@ -187,6 +187,12 @@ readExpr input = liftThrows $ case parse parseExpr "lisp" input of
     Left err  -> Left $ ParserError (show err)
     Right val -> Right val
 
+readExprList :: String -> Either LispError [LispVal]
+readExprList input = case parse (endBy parseExpr spaces) "lisp" input of
+    Left err  -> Left $ ParserError (show err)
+    Right val -> Right val
+
+
 testParse :: Parser LispVal -> String -> IO ()
 testParse parser input = case parse parser "lisp" input of
     Left err  -> putStrLn $ "Parse error: " ++ show err
