@@ -42,31 +42,6 @@ getVar envRef var = do
         Just val -> return val
         Nothing  -> throwError $ UnboundVar ("Undefined variable: " ++ var)
 
-
-evalLet :: Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
-evalLet env bindings body = do
-    -- Extend environment with bindings
-    newEnv <- extendEnv env bindings
-    -- Evaluate body in the extended environment
-    evalSequence newEnv body
-
-extendEnv :: Env -> [LispVal] -> IOThrowsError Env
-extendEnv envRef bindings = do
-    env <- liftIO $ readIORef envRef
-    newBindings <- mapM evalBinding bindings
-    liftIO $ newIORef (Map.union (Map.fromList newBindings) env)
-  where
-    evalBinding (List [Atom var, expr]) = do
-        val <- eval envRef expr
-        return (var, val)
-    evalBinding badForm = throwError $ BadSpecialForm "Invalid let binding" badForm
-
-evalSequence :: Env -> [LispVal] -> IOThrowsError LispVal
-evalSequence env [expr] = eval env expr
-evalSequence env (expr:rest) = eval env expr >> evalSequence env rest
-evalSequence _ [] = throwError $ BadSpecialForm "Empty let body" (List [])
-
-
 -- Apply a function (either built-in or user-defined)
 apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (BuiltinFunc f) args = liftThrows $ f args
