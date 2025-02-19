@@ -7,11 +7,11 @@ A set of blogposts accompanies this repository:
 
 * [Part 1](https://tuttlem.github.io/2025/02/15/writing-your-own-lisp-interpreter-in-haskell-part-1.html)
 * [Part 2](https://tuttlem.github.io/2025/02/15/writing-your-own-lisp-interpreter-in-haskell-part-2.html)
-* [Part 3](https://tuttlem.github.io/2025/02/15/writing-your-own-lisp-interpreter-in-haskell-part-3.html)
-* [Part 4](https://tuttlem.github.io/2025/02/15/writing-your-own-lisp-interpreter-in-haskell-part-4.html)
-* [Part 5](https://tuttlem.github.io/2025/02/15/writing-your-own-lisp-interpreter-in-haskell-part-5.html)
-* [Part 6](https://tuttlem.github.io/2025/02/15/writing-your-own-lisp-interpreter-in-haskell-part-6.html)
-* [Part 7](https://tuttlem.github.io/2025/02/15/writing-your-own-lisp-interpreter-in-haskell-part-7.html)
+* [Part 3](https://tuttlem.github.io/2025/02/16/writing-your-own-lisp-interpreter-in-haskell-part-3.html)
+* [Part 4](https://tuttlem.github.io/2025/02/16/writing-your-own-lisp-interpreter-in-haskell-part-4.html)
+* [Part 5](https://tuttlem.github.io/2025/02/16/writing-your-own-lisp-interpreter-in-haskell-part-5.html)
+* [Part 6](https://tuttlem.github.io/2025/02/18/writing-your-own-lisp-interpreter-in-haskell-part-6.html)
+* [Part 7](https://tuttlem.github.io/2025/02/18/writing-your-own-lisp-interpreter-in-haskell-part-7.html)
 
 **Current Features**:
 
